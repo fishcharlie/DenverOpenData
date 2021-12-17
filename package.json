@@ -1,0 +1,25 @@
+{
+  "name": "denveropendata",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "prepare": "npm run build:clean && npm run build",
+    "build": "tsc",
+    "build:watch": "npm run build -- --watch",
+    "build:clean": "rimraf dist"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/mkdirp": "^1.0.2",
+    "@types/node": "^16.11.10",
+    "rimraf": "^3.0.2",
+    "typescript": "^4.5.2"
+  },
+  "dependencies": {
+    "axios": "^0.24.0",
+    "cheerio": "^1.0.0-rc.10",
+    "mkdirp": "^1.0.4"
+  }
+}
