@@ -68,9 +68,11 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 
 		return datasets;
 	}
-	const datasets: Set<string> = await getDataSets(initialURL);
+	const useLocalDataSet = false;
+	const tmpDatasetsFile = path.join(__dirname, "..", "tmp", "datasets.json");
+	const datasets: Set<string> = useLocalDataSet ? new Set(JSON.parse(await fs.promises.readFile(tmpDatasetsFile, "utf8"))) : await getDataSets(initialURL);
 	await mkdirp(path.join(__dirname, "..", "tmp"));
-	await fs.promises.writeFile(path.join(__dirname, "..", "tmp", "datasets.json"), JSON.stringify([...datasets]));
+	await fs.promises.writeFile(tmpDatasetsFile, JSON.stringify([...datasets]));
 	console.log(`${datasets.size} datasets found.\n\n`);
 
 	const status = {
@@ -91,10 +93,7 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 					"responseType": "stream"
 				}, 3);
 				const linkExtension = path.extname(link);
-				if (name.endsWith(".")) {
-					name = name.substr(0, name.length - 1);
-				}
-				stream.data.pipe(fs.createWriteStream(path.join(saveDirectory, `${name}.${linkExtension}`)));
+				stream.data.pipe(fs.createWriteStream(path.join(saveDirectory, `${name}${linkExtension}`)));
 				stream.data.on("end", () => {
 					status.success++;
 					return resolve();
