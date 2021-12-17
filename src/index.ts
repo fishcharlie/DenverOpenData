@@ -68,8 +68,7 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 
 		return datasets;
 	}
-	// const datasets: Set<string> = await getDataSets(initialURL);
-	const datasets: Set<string> = new Set(["/opendata/dataset/city-and-county-of-denver-2011-budget"]);
+	const datasets: Set<string> = await getDataSets(initialURL);
 	await fs.promises.writeFile(path.join(__dirname, "..", "tmp", "datasets.json"), JSON.stringify([...datasets]));
 	console.log(`${datasets.size} datasets found.\n\n`);
 
