@@ -69,6 +69,7 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 		return datasets;
 	}
 	const datasets: Set<string> = await getDataSets(initialURL);
+	await mkdirp(path.join(__dirname, "..", "tmp"));
 	await fs.promises.writeFile(path.join(__dirname, "..", "tmp", "datasets.json"), JSON.stringify([...datasets]));
 	console.log(`${datasets.size} datasets found.\n\n`);
 
