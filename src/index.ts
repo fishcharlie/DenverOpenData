@@ -13,7 +13,7 @@ const initialURL = `${rootDomain}/opendata/search`;
 const dataDirectory = path.join(__dirname, "../data");
 const axiosInstance = axios.create({
 	"headers": {
-		"User-Agent": "DenverOpenDataArchiveScraper/0.1.0 (https://charlie.fish/contact, InDevelopment)",
+		"User-Agent": "DenverOpenDataArchiveScraper/1.0.0 (https://github.com/fishcharlie/DenverOpenData)",
 	}
 });
 
