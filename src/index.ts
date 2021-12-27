@@ -10,7 +10,7 @@ const timeout = util.promisify(setTimeout);
 
 const rootDomain = "https://www.denvergov.org";
 const initialURL = `${rootDomain}/opendata/search`;
-const dataDirectory = path.join(__dirname, "../data");
+const dataDirectory = path.join(__dirname, "..", "gitlabrepo", "data");
 const axiosInstance = axios.create({
 	"headers": {
 		"User-Agent": "DenverOpenDataArchiveScraper/1.0.0 (https://github.com/fishcharlie/DenverOpenData)",

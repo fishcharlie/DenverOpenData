@@ -13,13 +13,28 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: 16.x
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2.3.1
+        with:
+          key: ${{ secrets.GITLABSSHKEY }}
+          name: GitLab
+          known_hosts: |
+            137.184.246.135 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRK1+8EnrRp3k/YMeaQCplihJOhrzUy22/YVzWGsjND
+          config: |
+            Host gitlab.charlie.fish
+             IdentityFile ~/.ssh/GitLab
+             PreferredAuthentications publickey
+             HostName 137.184.246.135
+      - name: Clone GitLab Repo
+        run: |
+          git clone git@gitlab.charlie.fish:charlie/denveropendata.git gitlabrepo
       - run: npm i
       - run: node dist/index.js
-      - name: Commit & Push
-        uses: actions-x/commit@v2
-        with:
-          email: noreply@charlie.fish
-          name: GitHub Actions
-          branch: main
-          files: data
-          message: 'Updating data'
+      # - name: Commit & Push
+      #   uses: actions-x/commit@v2
+      #   with:
+      #     email: noreply@charlie.fish
+      #     name: GitHub Actions
+      #     branch: main
+      #     files: data
+      #     message: 'Updating data'
