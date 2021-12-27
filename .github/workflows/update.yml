@@ -26,14 +26,8 @@ jobs:
              PreferredAuthentications publickey
              HostName 137.184.246.135
       - name: Check SSH Connection to GitLab
-        env:
-          SSHPASS: ${{ secrets.GITLABSSHPASSPHRASE }}
         run: |
-          sshpass -e ssh -T git@gitlab.charlie.fish
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: true
+          ssh -T git@gitlab.charlie.fish
       - name: Clone GitLab Repo
         run: |
           git clone git@gitlab.charlie.fish:charlie/denveropendata.git gitlabrepo
