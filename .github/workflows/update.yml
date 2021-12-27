@@ -28,6 +28,10 @@ jobs:
       - name: Clone GitLab Repo
         run: |
           git clone git@gitlab.charlie.fish:charlie/denveropendata.git gitlabrepo
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
       - run: npm i
       - run: node dist/index.js
       # - name: Commit & Push
