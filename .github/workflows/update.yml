@@ -33,11 +33,11 @@ jobs:
           git clone git@gitlab.charlie.fish:charlie/denveropendata.git gitlabrepo
       - run: npm i
       - run: node dist/index.js
-      # - name: Commit & Push
-      #   uses: actions-x/commit@v2
-      #   with:
-      #     email: noreply@charlie.fish
-      #     name: GitHub Actions
-      #     branch: main
-      #     files: data
-      #     message: 'Updating data'
+      - name: Commit & Push Data
+        run: |
+          cd gitlabrepo
+          git config user.email "noreply@charlie.fish"
+          git config user.name "GitHub Actions"
+          git add .
+          git commit -m "Update data"
+          git push
