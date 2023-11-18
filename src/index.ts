@@ -190,9 +190,15 @@ const startDate = new Date();
 
 	console.log(`[${Date.now()}] Got all files.`);
 
+	const endpoint = process.env.S3_ENDPOINT;
+	const bucket = process.env.S3_BUCKET;
+
 	const s3Client = new S3Client({
-		"endpoint": process.env.S3_ENDPOINT
+		"endpoint": endpoint
 	});
+	console.log("S3 client created");
+	console.log(`Endpoint: ${endpoint}`);
+	console.log(`Bucket: ${bucket}`);
 	for (const file of allFiles) {
 		const filePathParts = file.file.split(path.sep);
 		const lastTwoParts = filePathParts.slice(filePathParts.length - 2);
@@ -215,10 +221,12 @@ const startDate = new Date();
 
 		let remoteHash;
 		try {
+			console.log("Getting remote hash");
 			remoteHash = await (await s3Client.send(new GetObjectCommand({
-				"Bucket": process.env.S3_BUCKET,
+				"Bucket": bucket,
 				"Key": urlSafeHashKey
-			}))).Body?.transformToString()
+			}))).Body?.transformToString();
+			console.log(`Got remote hash: ${remoteHash}`);
 		} catch (e) {
 			// no-op
 		}
@@ -226,15 +234,17 @@ const startDate = new Date();
 		if (remoteHash !== file.hash) {
 			console.log(`[${Date.now()}] Uploading ${file.file}`);
 			await s3Client.send(new PutObjectCommand({
-				"Bucket": process.env.S3_BUCKET,
+				"Bucket": bucket,
 				"Key": urlSafeKey,
 				"Body": fs.createReadStream(file.file)
 			}));
+			console.log(`[${Date.now()}] Uploading hash ${file.file}`);
 			await s3Client.send(new PutObjectCommand({
-				"Bucket": process.env.S3_BUCKET,
+				"Bucket": bucket,
 				"Key": urlSafeHashKey,
 				"Body": file.hash
 			}));
+			console.log(`[${Date.now()}] Uploaded ${file.file}`);
 		} else {
 			console.log(`[${Date.now()}] Skipping ${file.file}. No updates.`);
 		}
