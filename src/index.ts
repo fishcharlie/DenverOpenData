@@ -236,13 +236,15 @@ const startDate = new Date();
 			await s3Client.send(new PutObjectCommand({
 				"Bucket": bucket,
 				"Key": urlSafeKey,
-				"Body": fs.createReadStream(file.file)
+				"Body": fs.createReadStream(file.file),
+				"ACL": "public-read"
 			}));
 			console.log(`[${Date.now()}] Uploading hash ${file.file}`);
 			await s3Client.send(new PutObjectCommand({
 				"Bucket": bucket,
 				"Key": urlSafeHashKey,
-				"Body": file.hash
+				"Body": file.hash,
+				"ACL": "public-read"
 			}));
 			console.log(`[${Date.now()}] Uploaded ${file.file}`);
 		} else {
