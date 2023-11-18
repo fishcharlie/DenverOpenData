@@ -20,3 +20,4 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          AWS_REGION: us-central-1
