@@ -4,13 +4,18 @@ import * as url from "url";
 import * as util from "util";
 import * as path from "path";
 import * as fs from "fs";
-import * as mkdirp from "mkdirp";
+import { mkdirp } from "mkdirp";
 import AsyncThrottle from "./AsyncThrottle";
 const timeout = util.promisify(setTimeout);
+import * as crypto from "crypto";
+
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+
+console.log(`[${Date.now()}] Starting...`);
 
 const rootDomain = "https://www.denvergov.org";
 const initialURL = `${rootDomain}/opendata/search`;
-const dataDirectory = path.join(__dirname, "..", "gitlabrepo", "data");
+const dataDirectory = path.join(__dirname, "..", "data");
 const axiosInstance = axios.create({
 	"headers": {
 		"User-Agent": "DenverOpenDataArchiveScraper/1.0.0 (https://github.com/fishcharlie/DenverOpenData)",
@@ -39,6 +44,8 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 			throw error;
 		});
 }
+
+const startDate = new Date();
 
 (async () => {
 	async function getDataSets(initialURL: string, previouslyCrawledURLs: Set<string> = new Set()): Promise<Set<string>> {
@@ -73,7 +80,7 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 	const datasets: Set<string> = useLocalDataSet ? new Set(JSON.parse(await fs.promises.readFile(tmpDatasetsFile, "utf8"))) : await getDataSets(initialURL);
 	await mkdirp(path.join(__dirname, "..", "tmp"));
 	await fs.promises.writeFile(tmpDatasetsFile, JSON.stringify([...datasets]));
-	console.log(`${datasets.size} datasets found.\n\n`);
+	console.log(`[${Date.now()}] ${datasets.size} datasets found.\n\n`);
 
 	const status = {
 		"success": 0,
@@ -161,7 +168,7 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 	const results = await AsyncThrottle([...datasets], getDataFiles, {
 		"concurrency": 5
 	});
-	console.log(`Completed.`);
+	console.log(`[${Date.now()}] Completed downloading.`);
 	console.log(`\n\n---\n\n`);
 	console.log("Success:", status.success);
 	console.log("No description:", status.noDescription);
@@ -169,4 +176,84 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 	console.log("Link not found:", status.linkNotFound);
 	console.log("No file found:", status.noFileFound);
 	console.log("Error downloading file:", status.errorDownloadingFile);
+
+	// Recursively get all files in dataDirectory
+	const allFiles = getFilesRecursively(dataDirectory).map((file) => {
+		const hash = crypto.createHash("sha512");
+		hash.update(fs.readFileSync(file));
+
+		return {
+			"file": file,
+			"hash": hash.digest("hex")
+		};
+	});
+
+	console.log(`[${Date.now()}] Got all files.`);
+
+	const s3Client = new S3Client({
+		"endpoint": process.env.S3_ENDPOINT
+	});
+	for (const file of allFiles) {
+		const filePathParts = file.file.split(path.sep);
+		const lastTwoParts = filePathParts.slice(filePathParts.length - 2);
+
+		let remoteHash;
+		try {
+			remoteHash = await (await s3Client.send(new GetObjectCommand({
+				"Bucket": process.env.S3_BUCKET,
+				"Key": `${lastTwoParts[0]}/.${lastTwoParts[1].split(".")[0]}.sha512`
+			}))).Body?.transformToString()
+		} catch (e) {
+			// no-op
+		}
+
+		if (remoteHash !== file.hash) {
+			console.log(`[${Date.now()}] Uploading ${file.file}`);
+			await s3Client.send(new PutObjectCommand({
+				"Bucket": process.env.S3_BUCKET,
+				"Key": `${lastTwoParts[0]}/${formatDate(startDate)}/${lastTwoParts[1]}`,
+				"Body": fs.createReadStream(file.file)
+			}));
+			await s3Client.send(new PutObjectCommand({
+				"Bucket": process.env.S3_BUCKET,
+				"Key": `${lastTwoParts[0]}/.${lastTwoParts[1].split(".")[0]}.sha512`,
+				"Body": file.hash
+			}));
+		} else {
+			console.log(`[${Date.now()}] Skipping ${file.file}. No updates.`);
+		}
+	}
 })();
+
+function getFilesRecursively(directory: string): string[] {
+	let results: string[] = [];
+
+	const files = fs.readdirSync(directory);
+
+	for (const file of files) {
+		const filePath = path.join(directory, file);
+		const stat = fs.statSync(filePath);
+
+		if (stat.isDirectory()) {
+			results = results.concat(getFilesRecursively(filePath));
+		} else {
+			results.push(filePath);
+		}
+	}
+
+	return results;
+}
+
+function formatDate(date: Date | string) {
+	var d = new Date(date),
+		month = '' + (d.getUTCMonth() + 1),
+		day = '' + d.getUTCDate(),
+		year = d.getUTCFullYear();
+
+	if (month.length < 2)
+		month = '0' + month;
+	if (day.length < 2)
+		day = '0' + day;
+
+	return [year, month, day].join('-');
+}

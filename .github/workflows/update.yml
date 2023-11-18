@@ -8,36 +8,15 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Use Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: 16.x
-      - name: Install SSH Key
-        uses: shimataro/ssh-key-action@v2.3.1
-        with:
-          key: ${{ secrets.GITLABSSHKEY }}
-          name: GitLab
-          known_hosts: |
-            137.184.246.135 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRK1+8EnrRp3k/YMeaQCplihJOhrzUy22/YVzWGsjND
-          config: |
-            Host gitlab.charlie.fish
-             IdentityFile ~/.ssh/GitLab
-             PreferredAuthentications publickey
-             HostName 137.184.246.135
-      - name: Check SSH Connection to GitLab
-        run: |
-          ssh -T git@gitlab.charlie.fish
-      - name: Clone GitLab Repo
-        run: |
-          git clone git@gitlab.charlie.fish:charlie/denveropendata.git gitlabrepo
+          node-version: lts/*
       - run: npm i
       - run: node dist/index.js
-      - name: Commit & Push Data
-        run: |
-          cd gitlabrepo
-          git config user.email "noreply@charlie.fish"
-          git config user.name "GitHub Actions"
-          git add .
-          git commit -m "Update data"
-          git push
+        env:
+          - AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          - AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          - S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          - S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
