@@ -197,11 +197,27 @@ const startDate = new Date();
 		const filePathParts = file.file.split(path.sep);
 		const lastTwoParts = filePathParts.slice(filePathParts.length - 2);
 
+		const hashKey = `${lastTwoParts[0]}/.${lastTwoParts[1].split(".")[0]}.sha512`
+		const urlSafeHashKey = encodeURIComponent(hashKey);
+
+		const key = `${lastTwoParts[0]}/${formatDate(startDate)}/${lastTwoParts[1]}`;
+		const urlSafeKey = encodeURIComponent(key);
+
+		console.log(file);
+
+		console.log("hashKey", hashKey);
+		console.log("urlSafeHashKey", urlSafeHashKey);
+
+		console.log("key", key);
+		console.log("urlSafeKey", urlSafeKey);
+
+		console.log("\n");
+
 		let remoteHash;
 		try {
 			remoteHash = await (await s3Client.send(new GetObjectCommand({
 				"Bucket": process.env.S3_BUCKET,
-				"Key": `${lastTwoParts[0]}/.${lastTwoParts[1].split(".")[0]}.sha512`
+				"Key": urlSafeHashKey
 			}))).Body?.transformToString()
 		} catch (e) {
 			// no-op
@@ -211,12 +227,12 @@ const startDate = new Date();
 			console.log(`[${Date.now()}] Uploading ${file.file}`);
 			await s3Client.send(new PutObjectCommand({
 				"Bucket": process.env.S3_BUCKET,
-				"Key": `${lastTwoParts[0]}/${formatDate(startDate)}/${lastTwoParts[1]}`,
+				"Key": urlSafeKey,
 				"Body": fs.createReadStream(file.file)
 			}));
 			await s3Client.send(new PutObjectCommand({
 				"Bucket": process.env.S3_BUCKET,
-				"Key": `${lastTwoParts[0]}/.${lastTwoParts[1].split(".")[0]}.sha512`,
+				"Key": urlSafeHashKey,
 				"Body": file.hash
 			}));
 		} else {
