@@ -13,12 +13,14 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 
 console.log(`[${Date.now()}] Starting...`);
 
+const packageJSON = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+
 const rootDomain = "https://www.denvergov.org";
 const initialURL = `${rootDomain}/opendata/search`;
 const dataDirectory = path.join(__dirname, "..", "data");
 const axiosInstance = axios.create({
 	"headers": {
-		"User-Agent": "DenverOpenDataArchiveScraper/1.0.0 (https://github.com/fishcharlie/DenverOpenData)",
+		"User-Agent": `DenverOpenDataArchiveScraper/${packageJSON.version} (https://github.com/fishcharlie/DenverOpenData)`,
 	}
 });
 
