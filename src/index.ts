@@ -204,10 +204,10 @@ const startDate = new Date();
 		const lastTwoParts = filePathParts.slice(filePathParts.length - 2);
 
 		const hashKey = `${lastTwoParts[0]}/.${lastTwoParts[1].split(".")[0]}.sha512`
-		const urlSafeHashKey = encodeURIComponent(hashKey);
+		const urlSafeHashKey = hashKey;
 
 		const key = `${lastTwoParts[0]}/${formatDate(startDate)}/${lastTwoParts[1]}`;
-		const urlSafeKey = encodeURIComponent(key);
+		const urlSafeKey = key;
 
 		console.log(file);
 
