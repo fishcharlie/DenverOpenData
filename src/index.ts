@@ -1,6 +1,4 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
-import cheerio from "cheerio";
-import * as url from "url";
 import * as util from "util";
 import * as path from "path";
 import * as fs from "fs";
@@ -15,8 +13,8 @@ console.log(`[${Date.now()}] Starting...`);
 
 const packageJSON = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
 
-const rootDomain = "https://www.denvergov.org";
-const initialURL = `${rootDomain}/opendata/search`;
+const hubBaseUrl = "https://opendata-geospatialdenver.hub.arcgis.com";
+const denverOrgId = "zdB7qR0BtYrg0Xpl";
 const dataDirectory = path.join(__dirname, "..", "data");
 const axiosInstance = axios.create({
 	"headers": {
@@ -47,137 +45,156 @@ function axiosRetry(config: AxiosRequestConfig<any>, retries: number = 3): Promi
 		});
 }
 
+interface Dataset {
+	id: string;
+	name: string;
+	itemId: string;
+	hubType: string;
+	content: string;
+}
+
 const startDate = new Date();
 
 (async () => {
-	async function getDataSets(initialURL: string, previouslyCrawledURLs: Set<string> = new Set()): Promise<Set<string>> {
-		const datasets: Set<string> = new Set();
+	async function getAllDatasets(): Promise<Dataset[]> {
+		const datasets: Dataset[] = [];
+		let pageNumber = 1;
+		const pageSize = 100;
 
-		const dataSetsPage = (await axiosGetRetry(initialURL, 5)).data;
-		previouslyCrawledURLs.add(initialURL);
-		const $ = cheerio.load(dataSetsPage);
+		while (true) {
+			const apiUrl = `${hubBaseUrl}/api/v3/datasets?filter[orgId]=${denverOrgId}&filter[downloadable]=true&page[size]=${pageSize}&page[number]=${pageNumber}&fields[datasets]=slug,name,downloadable,content,hubType,itemId`;
+			const response = (await axiosGetRetry(apiUrl, 5)).data;
 
-		$("div.results div.result div.result-title a").map((i, el) => {
-			const url = $(el).attr("href");
-			if (url) {
-				datasets.add(url);
+			for (const item of response.data) {
+				datasets.push({
+					id: item.id,
+					name: item.attributes.name,
+					itemId: item.attributes.itemId,
+					hubType: item.attributes.hubType,
+					content: item.attributes.content,
+				});
 			}
-		});
 
-		const nextURLPath = $("div.pager-container > div.pager > a:last-of-type").attr("href");
-		if (nextURLPath) {
-			const nextURL = new url.URL(nextURLPath, initialURL).toString();
-
-			if (nextURL && !previouslyCrawledURLs.has(nextURL)) {
-				await timeout(1000);
-				const nextDataSets = await getDataSets(new url.URL(nextURL, initialURL).toString(), previouslyCrawledURLs);
-				nextDataSets.forEach(dataset => datasets.add(dataset));
-			}
+			if (response.meta.page.nextStart === -1 || response.data.length === 0) break;
+			pageNumber++;
+			await timeout(500);
 		}
 
 		return datasets;
 	}
+
 	const useLocalDataSet = false;
 	const tmpDatasetsFile = path.join(__dirname, "..", "tmp", "datasets.json");
-	const datasets: Set<string> = useLocalDataSet ? new Set(JSON.parse(await fs.promises.readFile(tmpDatasetsFile, "utf8"))) : await getDataSets(initialURL);
+	const datasets: Dataset[] = useLocalDataSet ? JSON.parse(await fs.promises.readFile(tmpDatasetsFile, "utf8")) : await getAllDatasets();
 	await mkdirp(path.join(__dirname, "..", "tmp"));
-	await fs.promises.writeFile(tmpDatasetsFile, JSON.stringify([...datasets]));
-	console.log(`[${Date.now()}] ${datasets.size} datasets found.\n\n`);
+	await fs.promises.writeFile(tmpDatasetsFile, JSON.stringify(datasets));
+	console.log(`[${Date.now()}] ${datasets.length} datasets found.\n\n`);
 
 	const status = {
 		"success": 0,
-		"noDescription": 0,
-		"noTitle": 0,
-		"linkNotFound": 0,
-		"noFileFound": 0,
+		"skipped": 0,
+		"pending": 0,
 		"errorDownloadingFile": 0
 	};
-	const validTypes = ["csv", "json", "pdf"];
-	function getDataFile(link: string, name: string, datasetURL: string, saveDirectory: string): Promise<void> {
-		return new Promise<void>(async (resolve) => {
-			try {
-				const stream = await axiosRetry({
-					"method": "GET",
-					"url": link,
-					"responseType": "stream"
-				}, 3);
-				const linkExtension = path.extname(link);
-				stream.data.pipe(fs.createWriteStream(path.join(saveDirectory, `${name}${linkExtension}`)));
-				stream.data.on("end", () => {
-					status.success++;
-					return resolve();
-				});
-			} catch (error) {
-				console.error(`Error downloading file (${link}) for ${datasetURL}`);
-				status.errorDownloadingFile++;
-				return resolve();
-			}
-		});
+
+	function sanitizeFileName(name: string): string {
+		return name.replace(/[/\\?%*:|"<>]/g, "-").trim();
 	}
-	function getDataFiles(pathString: string): Promise<void> {
-		return new Promise(async (resolve) => {
-			const datasetURL = `${rootDomain}${pathString}`;
-			const datasetPage = (await axiosGetRetry(datasetURL, 3)).data;
-			const $ = cheerio.load(datasetPage);
-			const title = $("h2.package-title").text();
-			if (!title) {
-				console.error(`No title found for ${datasetURL}`);
-				status.noTitle++;
-				return resolve();
-			}
-			const linkCSSSelector = "td a[data-action=Download],a[data-action=Open]";
-			const tr = $("div.container table tbody tr").filter((i, el): boolean => {
-				const $el = $(el);
-				const formatText = $el.find("td span.format").text();
-				const link = $el.find(linkCSSSelector).attr("href");
-				if (formatText && link) {
-					const format = validTypes.find((type) => formatText.toLowerCase() === type);
-					return Boolean(format) && link.endsWith(`.${format}`);
+
+	function getFileExtension(dataset: Dataset): string | null {
+		if (dataset.content === "Feature Service") return ".csv";
+		const typeMap: Record<string, string> = {
+			"CSV": ".csv",
+			"CSV Collection": ".csv",
+			"GeoJSON": ".geojson",
+			"GeoJson": ".geojson",
+			"KML": ".kml",
+			"KML Collection": ".kml",
+			"Shapefile": ".zip",
+			"PDF": ".pdf",
+			"Microsoft Excel": ".xlsx",
+		};
+		return typeMap[dataset.hubType] ?? typeMap[dataset.content] ?? null;
+	}
+
+	async function getFeatureServiceDownloadUrl(dataset: Dataset): Promise<string | null> {
+		const layerMatch = dataset.id.match(/_(\d+)$/);
+		const layerIndex = layerMatch ? layerMatch[1] : "0";
+		const apiUrl = `${hubBaseUrl}/api/download/v1/items/${dataset.itemId}/csv?layers=${layerIndex}&redirect=false`;
+
+		for (let attempt = 0; attempt < 5; attempt++) {
+			try {
+				const response = await axiosGetRetry(apiUrl);
+				if (response.data.status === "Completed" && response.data.resultUrl) {
+					return response.data.resultUrl;
+				} else if (response.data.status === "Pending") {
+					await timeout(10000);
 				} else {
-					return false;
+					return null;
 				}
+			} catch {
+				return null;
+			}
+		}
+		return null;
+	}
+
+	async function downloadDataset(dataset: Dataset): Promise<void> {
+		const extension = getFileExtension(dataset);
+		if (!extension) {
+			status.skipped++;
+			return;
+		}
+
+		const safeName = sanitizeFileName(dataset.name);
+		const dir = path.join(dataDirectory, safeName);
+
+		try {
+			let downloadUrl: string | null = null;
+
+			if (dataset.content === "Feature Service") {
+				downloadUrl = await getFeatureServiceDownloadUrl(dataset);
+			} else {
+				downloadUrl = `https://www.arcgis.com/sharing/rest/content/items/${dataset.itemId}/data`;
+			}
+
+			if (!downloadUrl) {
+				console.warn(`Could not get download URL for: ${dataset.name} (${dataset.id})`);
+				status.pending++;
+				return;
+			}
+
+			await mkdirp(dir);
+			const filePath = path.join(dir, `${safeName}${extension}`);
+
+			const stream = await axiosRetry({
+				"method": "GET",
+				"url": downloadUrl,
+				"responseType": "stream"
+			}, 3);
+
+			await new Promise<void>((resolve, reject) => {
+				const writeStream = fs.createWriteStream(filePath);
+				stream.data.pipe(writeStream);
+				writeStream.on("finish", resolve);
+				writeStream.on("error", reject);
 			});
 
-			if (tr.length >= 1) {
-				const trLength = tr.length;
-				for (let i = 0; i < trLength; i++) {
-					const $tr = tr.eq(i);
-					const description = $tr.find("td:first-child").text().trim();
-					if (!description) {
-						console.error(`No description found for ${datasetURL}`);
-						status.noDescription++;
-						break;
-					} else {
-						const link = $tr.find(linkCSSSelector).attr("href");
-						if (link) {
-							const dir = path.join(dataDirectory, title);
-							await mkdirp(dir);
-							await getDataFile(link, description, datasetURL, dir);
-						} else {
-							console.error(`Link not found for ${datasetURL}`);
-							status.linkNotFound++;
-							break;
-						}
-					}
-				}
-			} else {
-				console.warn(`No file found for ${datasetURL}`);
-				status.noFileFound++;
-			}
-			return resolve();
-		});
+			status.success++;
+		} catch (error) {
+			console.error(`Error downloading dataset: ${dataset.name} (${dataset.id})`);
+			status.errorDownloadingFile++;
+		}
 	}
-	const results = await AsyncThrottle([...datasets], getDataFiles, {
-		"concurrency": 5
-	});
+
+	await AsyncThrottle(datasets, downloadDataset, { "concurrency": 5 });
+
 	console.log(`[${Date.now()}] Completed downloading.`);
 	console.log(`\n\n---\n\n`);
 	console.log("Success:", status.success);
-	console.log("No description:", status.noDescription);
-	console.log("No title:", status.noTitle);
-	console.log("Link not found:", status.linkNotFound);
-	console.log("No file found:", status.noFileFound);
-	console.log("Error downloading file:", status.errorDownloadingFile);
+	console.log("Skipped (unsupported type):", status.skipped);
+	console.log("Pending (timed out):", status.pending);
+	console.log("Error downloading:", status.errorDownloadingFile);
 
 	// Recursively get all files in dataDirectory
 	const allFiles = getFilesRecursively(dataDirectory).map((file) => {
