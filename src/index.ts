@@ -16,6 +16,8 @@ const packageJSON = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "packa
 const hubBaseUrl = "https://opendata-geospatialdenver.hub.arcgis.com";
 const denverOrgId = "zdB7qR0BtYrg0Xpl";
 const dataDirectory = path.join(__dirname, "..", "data");
+const dryRun = process.env.DRY_RUN === "true";
+const maxDatasets = process.env.MAX_DATASETS ? parseInt(process.env.MAX_DATASETS, 10) : undefined;
 const axiosInstance = axios.create({
 	"headers": {
 		"User-Agent": `DenverOpenDataArchiveScraper/${packageJSON.version} (https://github.com/fishcharlie/DenverOpenData)`,
@@ -187,7 +189,12 @@ const startDate = new Date();
 		}
 	}
 
-	await AsyncThrottle(datasets, downloadDataset, { "concurrency": 5 });
+	const datasetsToProcess = maxDatasets ? datasets.slice(0, maxDatasets) : datasets;
+	if (maxDatasets) {
+		console.log(`[${Date.now()}] Limiting to ${datasetsToProcess.length} datasets (MAX_DATASETS=${maxDatasets}).`);
+	}
+
+	await AsyncThrottle(datasetsToProcess, downloadDataset, { "concurrency": 5 });
 
 	console.log(`[${Date.now()}] Completed downloading.`);
 	console.log(`\n\n---\n\n`);
@@ -195,6 +202,11 @@ const startDate = new Date();
 	console.log("Skipped (unsupported type):", status.skipped);
 	console.log("Pending (timed out):", status.pending);
 	console.log("Error downloading:", status.errorDownloadingFile);
+
+	if (dryRun) {
+		console.log(`\n[${Date.now()}] DRY_RUN=true — skipping S3 upload.`);
+		return;
+	}
 
 	// Recursively get all files in dataDirectory
 	const allFiles = getFilesRecursively(dataDirectory).map((file) => {
