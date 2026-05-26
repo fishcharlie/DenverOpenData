@@ -1,26 +1,26 @@
-name: Update
-on:
-  schedule:
-    - cron: '30 6 * * *'
-  workflow_dispatch:
+# name: Update
+# on:
+#   schedule:
+#     - cron: '30 6 * * *'
+#   workflow_dispatch:
 
-jobs:
-  update:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: ${{ github.workflow }}
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-      - run: npm i
-      - run: node dist/index.js
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          S3_BUCKET: ${{ vars.S3_BUCKET }}
-          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
-          AWS_REGION: us-central-1
+# jobs:
+#   update:
+#     runs-on: ubuntu-latest
+#     concurrency:
+#       group: ${{ github.workflow }}
+#       cancel-in-progress: true
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Use Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: lts/*
+#       - run: npm i
+#       - run: node dist/index.js
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           S3_BUCKET: ${{ vars.S3_BUCKET }}
+#           S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+#           AWS_REGION: us-central-1
